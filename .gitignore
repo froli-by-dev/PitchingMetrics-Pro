@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.env
+venv/
+.vscode/
+pitching_app.db
+videos_procesados/*
+!videos_procesados/.gitkeep

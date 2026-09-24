@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PitchingMetrics Pro – Pitching Biomechanics Pro</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <header>
+    <h1>⚾ Pitching<span>Metrics</span> Pro</h1>
+    <div id="status-badge" style="color: var(--success); font-weight: 600; font-size: 0.9rem;">● API Conectada</div>
+  </header>
+
+  <div class="container">
+    
+    <!-- Panel Izquierdo: Configuración y Carga -->
+    <aside class="card">
+      <h2 style="font-size: 1.1rem; margin-bottom: 1.2rem;">Panel de Control</h2>
+
+      <div class="form-group">
+        <label for="pitcher-select">SELECCIONAR PITCHER</label>
+        <select id="pitcher-select">
+          <option value="1">César Castillo (ID: 1)</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="video-input">CARGAR VIDEO (.MP4)</label>
+        <input type="file" id="video-input" accept="video/mp4,video/mov">
+      </div>
+
+      <button id="btn-analyze">Iniciar Análisis Biomecánico</button>
+
+      <div class="spinner" id="loading-spinner" style="display: none;">
+        ⌛ Procesando biomecánica y generando video anotado...
+      </div>
+    </aside>
+
+    <!-- Panel Central: Reproductor de Video -->
+    <section class="card">
+      <h2 style="font-size: 1.1rem; margin-bottom: 1.2rem;">Reproductor Biomecánico</h2>
+      <video id="player" controls autoplay muted playsinline style="width: 100%; border-radius: 8px; background: black;">
+        <source src="Biomecanica de Pitcher.mp4" type="video/mp4">
+        Tu navegador no soporta la reproducción de video HTML5.
+      </video>
+    </section>
+
+    <!-- Panel Derecho: Diagnóstico Clínico y Métricas -->
+    <section class="card">
+      <h2 style="font-size: 1.1rem; margin-bottom: 1.2rem;">Diagnóstico Clínico</h2>
+
+      <h3 style="font-size: 0.95rem; margin-top: 1rem;">🦶 Foot Strike (Contacto Inicial)</h3>
+      <div id="fs-metrics">
+        <p style="font-size: 0.85rem; opacity: 0.7;">Carga un video para mostrar métricas del Foot Strike.</p>
+      </div>
+
+      <h3 style="font-size: 0.95rem; margin-top: 1.5rem;">🎯 Release Point (Punto de Soltar)</h3>
+      <div id="rel-metrics">
+        <p style="font-size: 0.85rem; opacity: 0.7;">Carga un video para mostrar métricas del Release Point.</p>
+      </div>
+    </section>
+
+  </div>
+
+  <script>
+    const API_URL = "http://127.0.0.1:8080";
+
+    const btnAnalyze = document.getElementById("btn-analyze");
+    const videoInput = document.getElementById("video-input");
+    const pitcherSelect = document.getElementById("pitcher-select");
+    const spinner = document.getElementById("loading-spinner");
+    const player = document.getElementById("player");
+    const fsContainer = document.getElementById("fs-metrics");
+    const relContainer = document.getElementById("rel-metrics");
+
+    btnAnalyze.addEventListener("click", async () => {
+      const file = videoInput.files[0];
+      const pitcherId = pitcherSelect.value;
+
+      if (!file) {
+        alert("Por favor selecciona un archivo de video.");
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      btnAnalyze.disabled = true;
+      spinner.style.display = "block";
+
+      try {
+        const response = await fetch(`${API_URL}/analizar-video/${pitcherId}`, {
+          method: "POST",
+          body: formData
+        });
+
+        if (!response.ok) throw new Error("Error en el servidor al procesar el video");
+
+        const data = await response.json();
+
+      // Cargar y reproducir Video anotado
+      const videoFilename = data.video_procesado.split('/').pop();
+      const videoSrc = `${API_URL}/descargar-video/${videoFilename}?t=${Date.now()}`;
+
+      // 1. Buscar el elemento <source> dentro del <video>
+      const sourceTag = player.querySelector('source');
+
+      if (sourceTag) {
+      sourceTag.src = videoSrc;
+      } else {
+      player.src = videoSrc;
+      }
+
+// 2. IMPORTANTE: Recargar el reproductor para aplicar el nuevo src
+player.load();
+
+// 3. Reproducir el video
+player.play().catch(err => console.log('Error de reproducción:', err));
+        // Renderizar Métricas
+        renderMetrics(data.fases_biomecanicas.foot_strike, fsContainer);
+        renderMetrics(data.fases_biomecanicas.release_point, relContainer);
+
+      } catch (err) {
+        alert("Ocurrió un error al procesar el video.");
+        console.error(err);
+      } finally {
+        btnAnalyze.disabled = false;
+        spinner.style.display = "none";
+      }
+    });
+
+    function renderMetrics(metricsObj, container) {
+      container.innerHTML = "";
+      for (const [key, item] of Object.entries(metricsObj)) {
+        const isOk = item.estado === "Excelente";
+        const title = key.replace(/_/g, " ").toUpperCase();
+        
+        const html = `
+          <div class="metric-card ${isOk ? 'excellent' : 'risk'}">
+            <div class="metric-header">
+              <span>${title}</span>
+              <span>${item.valor}°</span>
+            </div>
+            <div class="metric-desc">
+              <strong>Rango Óptimo:</strong> ${item.rango_optimo} | <strong>Estado:</strong> ${item.estado}<br>
+              <em>${item.evaluacion}</em>
+            </div>
+          </div>
+        `;
+        container.innerHTML += html;
+      }
+    }
+  </script>
+
+</body>
+</html>
